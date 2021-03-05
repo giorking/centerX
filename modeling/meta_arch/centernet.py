@@ -95,6 +95,7 @@ class CenterNet(nn.Module):
                 kd_loss = self.kd_loss(pred_dict, teacher_output)
                 sd_loss = self.sd_loss(up_fmap, teacher_output_feat)
                 mimic_loss = self.mimic_loss(up_fmap, teacher_output_feat)
+                
                 kd_losses = {**kd_losses, **kd_loss}
                 kd_losses = {**kd_losses, **sd_loss}
                 kd_losses = {**kd_losses, **mimic_loss}

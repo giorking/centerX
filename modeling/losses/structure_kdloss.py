@@ -217,13 +217,16 @@ class CriterionPixelWise(nn.Module):
             print("disabled the reduce.")
 
     def forward(self, preds_S, preds_T):
-        preds_T[0].detach()
-        assert preds_S[0].shape == preds_T[0].shape,'the output dim of teacher and student differ'
-        N,C,W,H = preds_S[0].shape
-        softmax_pred_T = F.softmax(preds_T[0].permute(0,2,3,1).contiguous().view(-1,C), dim=1)
-        logsoftmax = nn.LogSoftmax(dim=1)
-        loss = (torch.sum( - softmax_pred_T * logsoftmax(preds_S[0].permute(0,2,3,1).contiguous().view(-1,C))))/W/H
-        return loss
+        losses = {}
+        for key in preds_S.keys(): 
+            preds_T[key].detach()
+            assert preds_S[key].shape == preds_T[key].shape,'the output dim of teacher and student differ'
+            N,C,W,H = preds_S[key].shape
+            softmax_pred_T = F.softmax(preds_T[key].permute(0,2,3,1).contiguous().view(-1,C), dim=1)
+            logsoftmax = nn.LogSoftmax(dim=1)
+            loss = {'loss_' + key: (torch.sum( - softmax_pred_T * logsoftmax(preds_S[key].permute(0,2,3,1).contiguous().view(-1,C))))/W/H}
+            losses = {**losses, **loss}
+        return losses
 
 class CriterionPairWiseforWholeFeatAfterPool(nn.Module):
     def __init__(self, scale, feat_ind, single_scale=False):
@@ -246,7 +249,7 @@ class CriterionPairWiseforWholeFeatAfterPool(nn.Module):
         total_w, total_h = feat_T.shape[2], feat_T.shape[3]
         patch_w, patch_h = int(total_w*self.scale), int(total_h*self.scale)
         maxpool = nn.MaxPool2d(kernel_size=(patch_w, patch_h), stride=(patch_w, patch_h), padding=0, ceil_mode=True) # change
-        loss = self.criterion(maxpool(feat_S), maxpool(feat_T))
+        loss = {'loss_mimic': self.criterion(maxpool(feat_S), maxpool(feat_T))}
         return loss
 
 class CriterionKD_old(nn.Module):
@@ -355,9 +358,9 @@ class CriterionSDcos(nn.Module):
 
     def forward(self, preds, soft):
         # h, w = labels.size(1), labels.size(2)
-        graph_s = self.attn(preds[self.pred_p])
-        graph_t = self.attn(soft[self.soft_p])
-        loss_graph = self.criterion_sd(graph_s, graph_t)
+        graph_s = self.attn(preds[self.pred_p-1])
+        graph_t = self.attn(soft[self.soft_p-1])
+        loss_graph = {'loss_structure': self.criterion_sd(graph_s, graph_t)}
 
         return loss_graph
 
