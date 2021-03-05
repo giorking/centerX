@@ -6,7 +6,7 @@ import torch.nn as nn
 
 # from centernet.network.backbone import Backbone
 from ..backbone import build_backbone
-from ..losses import reg_l1_loss, modified_focal_loss, KdLoss, ignore_unlabel_focal_loss, mse_loss
+from ..losses import reg_l1_loss, modified_focal_loss, KdLoss, ignore_unlabel_focal_loss, mse_loss, CriterionKD, CriterionSDcos, CriterionPairWiseforWholeFeatAfterPool, CriterionPixelWise
 from detectron2.modeling.meta_arch.build import META_ARCH_REGISTRY
 from detectron2.structures import Boxes, ImageList, Instances
 from ..layers import *
@@ -42,7 +42,10 @@ class CenterNet(nn.Module):
         pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(3, 1, 1)
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         if cfg.MODEL.CENTERNET.KD.ENABLED:
-            self.kd_loss = KdLoss(cfg)
+            #self.kd_loss = KdLoss(cfg)
+            self.kd_loss = CriterionPixelWise()
+            self.sd_loss = CriterionSDcos()
+            self.mimic_loss = CriterionPairWiseforWholeFeatAfterPool(4, 0, single_scale=True)
             self.kd_without_label = cfg.MODEL.CENTERNET.KD.KD_WITHOUT_LABEL
 
         self.to(self.device)
@@ -84,11 +87,17 @@ class CenterNet(nn.Module):
             kd_losses = {}
             for idx, model_t in enumerate(model_ts):
                 with torch.no_grad():
-                    teacher_output = model_t.backbone(images.tensor)
-                    teacher_output = model_t.upsample(teacher_output)
-                    teacher_output = model_t.head(teacher_output)
-                kd_loss = self.kd_loss(pred_dict, teacher_output, idx) #, model_ts, images)
+                    teacher_output_feat = model_t.backbone(images.tensor)
+                    teacher_output_feat = model_t.upsample(teacher_output_feat)
+                    teacher_output = model_t.head(teacher_output_feat)
+                #kd_loss = self.kd_loss(pred_dict, teacher_output, idx) #, model_ts, images)
+                #for idx in range(len(teacher_output)):
+                kd_loss = self.kd_loss(pred_dict, teacher_output)
+                sd_loss = self.sd_loss(up_fmap, teacher_output_feat)
+                mimic_loss = self.mimic_loss(up_fmap, teacher_output_feat)
                 kd_losses = {**kd_losses, **kd_loss}
+                kd_losses = {**kd_losses, **sd_loss}
+                kd_losses = {**kd_losses, **mimic_loss}
             if self.kd_without_label:
                 loss = kd_losses
                 return loss
