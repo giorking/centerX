@@ -77,7 +77,17 @@ class ModulatedDeformConvWithOff(nn.Module):
         )
         self.dcnv2 = ModulatedDeformConv(
             in_channels,
-            out_channels,ModulatedDeformConvWithOffdim=1)
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            deformable_groups=deformable_groups,
+        )
+
+    def forward(self, input):
+        x = self.offset_mask_conv(input)
+        o1, o2, mask = torch.chunk(x, 3, dim=1)
         offset = torch.cat((o1, o2), dim=1)
         mask = torch.sigmoid(mask)
         output = self.dcnv2(input, offset, mask)
