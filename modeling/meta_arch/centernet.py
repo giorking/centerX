@@ -43,9 +43,9 @@ class CenterNet(nn.Module):
         self.normalizer = lambda x: (x - pixel_mean) / pixel_std
         if cfg.MODEL.CENTERNET.KD.ENABLED:
             #self.kd_loss = KdLoss(cfg)
-            self.kd_loss = CriterionPixelWise()
-            self.sd_loss = CriterionSDcos()
-            self.mimic_loss = CriterionPairWiseforWholeFeatAfterPool(4, 0, single_scale=True)
+            self.kd_loss = CriterionPixelWise(cfg)
+            self.sd_loss = CriterionSDcos(cfg)
+            self.mimic_loss = CriterionPairWiseforWholeFeatAfterPool(cfg, 4, 0, single_scale=True)
             self.kd_without_label = cfg.MODEL.CENTERNET.KD.KD_WITHOUT_LABEL
 
         self.to(self.device)

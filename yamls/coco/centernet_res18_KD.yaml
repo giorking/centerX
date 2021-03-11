@@ -33,27 +33,29 @@ MODEL:
       TEACHER_WEIGTHS: ["exp_results/coco/coco_exp_R50_SGD_0.5/model_final.pth"]
 #      TEACHER_WEIGTHS: ["models/coco_exp_R50_SGD_0.5.pth"]
       KD_WEIGHT: [5.0]
-      KD_CLS_WEIGHT: [100000.0]
-      KD_WH_WEIGHT: [1.0]
+      KD_CLS_WEIGHT: [0.001, ] #[100000.0]
+      KD_WH_WEIGHT: [0.01] #[1.0]
       KD_REG_WEIGHT: [0.1]
+      KD_MIMIC_WEIGHT: [100000000000000, ]
+      KD_SD_WEIGHT: [1000000000, ]
       KD_CLS_INDEX: [80]
       NORM_WH: [True]
 
 TEST:
   EVAL_PERIOD: 1
 DATALOADER:
-  NUM_WORKERS: 4
+  NUM_WORKERS: 8 #4
 
 DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST: ("coco_2017_val",)
 
 SOLVER:
-  IMS_PER_BATCH: 2 #64
+  IMS_PER_BATCH: 64
   WARMUP_ITERS: 1
   STEPS: (50, 62)
   MAX_ITER: 70
-  BASE_LR: 5e-4  #5e-4
+  BASE_LR: 0.01 #5e-4  #5e-4
   LR_SCHEDULER_NAME: "WarmupCosineAnnealingLR"
   COSINE_DECAY_ITER: 0.1
   OPTIM_NAME: "Adam"

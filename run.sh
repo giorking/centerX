@@ -1,6 +1,6 @@
-python train_net.py \
-  --config-file yamls/coco/centernet_res18_coco_0.5.yaml  \
-  --num-gpus 4 \
+python3.7 train_net.py \
+  --config-file yamls/coco/centernet_res18_KD.yaml  \
+  --num-gpus 8 \
   --dist-url "tcp://127.0.0.1:50001" \
 
 #python train_net.py \

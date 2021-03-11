@@ -209,35 +209,49 @@ class CriterionOhemDSN(nn.Module):
         return loss1 + loss2*0.4
 
 class CriterionPixelWise(nn.Module):
-    def __init__(self, ignore_index=255, use_weight=True, reduce=True):
+    def __init__(self, cfg, ignore_index=255, use_weight=True, reduce=True):
         super(CriterionPixelWise, self).__init__()
         self.ignore_index = ignore_index
         self.criterion = torch.nn.CrossEntropyLoss(ignore_index=ignore_index, reduce=reduce)
         if not reduce:
             print("disabled the reduce.")
+        self.kd_param = cfg.MODEL.CENTERNET.KD
 
-    def forward(self, preds_S, preds_T):
+    def forward(self, preds_S, preds_T, idx=0):
+        kd_weight = self.kd_param.KD_WEIGHT[idx]
+        kd_cls_weight = kd_weight * self.kd_param.KD_CLS_WEIGHT[idx]
+        kd_wh_weight = kd_weight * self.kd_param.KD_WH_WEIGHT[idx]
+        kd_reg_weight = kd_weight * self.kd_param.KD_REG_WEIGHT[idx]
+
         losses = {}
         for key in preds_S.keys(): 
             preds_T[key].detach()
+            if 'reg' in key:
+                w = kd_reg_weight
+            elif 'wh' in key:
+                w = kd_wh_weight
+            elif 'cls' in key:
+                w = kd_cls_weight
+            else: assert(0)
             assert preds_S[key].shape == preds_T[key].shape,'the output dim of teacher and student differ'
             N,C,W,H = preds_S[key].shape
             softmax_pred_T = F.softmax(preds_T[key].permute(0,2,3,1).contiguous().view(-1,C), dim=1)
             logsoftmax = nn.LogSoftmax(dim=1)
-            loss = {'loss_' + key: (torch.sum( - softmax_pred_T * logsoftmax(preds_S[key].permute(0,2,3,1).contiguous().view(-1,C))))/W/H}
+            loss = {f'loss_{idx}_' + key  : w * (torch.sum( - softmax_pred_T * logsoftmax(preds_S[key].permute(0,2,3,1).contiguous().view(-1,C))))/W/H}
             losses = {**losses, **loss}
         return losses
 
 class CriterionPairWiseforWholeFeatAfterPool(nn.Module):
-    def __init__(self, scale, feat_ind, single_scale=False):
+    def __init__(self, cfg, scale, feat_ind, single_scale=False):
         '''inter pair-wise loss from inter feature maps'''
         super(CriterionPairWiseforWholeFeatAfterPool, self).__init__()
         self.criterion = sim_dis_compute
         self.feat_ind = feat_ind
         self.scale = scale
         self.single_scale = single_scale
+        self.kd_param = cfg.MODEL.CENTERNET.KD
 
-    def forward(self, preds_S, preds_T):
+    def forward(self, preds_S, preds_T, idx=0):
         if self.single_scale:
             feat_S = preds_S
             feat_T = preds_T
@@ -246,10 +260,13 @@ class CriterionPairWiseforWholeFeatAfterPool(nn.Module):
             feat_T = preds_T[self.feat_ind]
         feat_T.detach()
 
+        kd_weight = self.kd_param.KD_WEIGHT[idx]
+        kd_mimic_weight = kd_weight * self.kd_param.KD_MIMIC_WEIGHT[idx]
+
         total_w, total_h = feat_T.shape[2], feat_T.shape[3]
         patch_w, patch_h = int(total_w*self.scale), int(total_h*self.scale)
         maxpool = nn.MaxPool2d(kernel_size=(patch_w, patch_h), stride=(patch_w, patch_h), padding=0, ceil_mode=True) # change
-        loss = {'loss_mimic': self.criterion(maxpool(feat_S), maxpool(feat_T))}
+        loss = {'loss_mimic': self.criterion(maxpool(feat_S), maxpool(feat_T)) * kd_mimic_weight}
         return loss
 
 class CriterionKD_old(nn.Module):
@@ -336,7 +353,7 @@ class CriterionSDcos(nn.Module):
     '''
     structure distillation loss based on graph
     '''
-    def __init__(self, ignore_index=255, use_weight=True, pp=1, sp=1):
+    def __init__(self, cfg, ignore_index=255, use_weight=True, pp=1, sp=1):
         super(CriterionSDcos, self).__init__()
         self.ignore_index = ignore_index
         self.use_weight = use_weight
@@ -355,12 +372,15 @@ class CriterionSDcos(nn.Module):
         # self.criterion = torch.nn.NLLLoss(ignore_index=ignore_index)
         # # self.criterion_cls = torch.nn.BCEWithLogitsLoss()
         self.criterion_sd = torch.nn.MSELoss()
+        self.kd_param = cfg.MODEL.CENTERNET.KD
 
-    def forward(self, preds, soft):
+    def forward(self, preds, soft, idx=0):
         # h, w = labels.size(1), labels.size(2)
+        kd_weight = self.kd_param.KD_WEIGHT[idx]
+        kd_sd_weight = kd_weight * self.kd_param.KD_SD_WEIGHT[idx]
         graph_s = self.attn(preds[self.pred_p-1])
         graph_t = self.attn(soft[self.soft_p-1])
-        loss_graph = {'loss_structure': self.criterion_sd(graph_s, graph_t)}
+        loss_graph = {f'loss_structure{idx}': self.criterion_sd(graph_s, graph_t)* kd_sd_weight}
 
         return loss_graph
 
